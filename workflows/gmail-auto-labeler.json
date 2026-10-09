@@ -1,0 +1,301 @@
+{
+  "name": "Gmail Auto-Labeler",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [1],
+              "triggerAtHour": 18
+            }
+          ]
+        }
+      },
+      "id": "7f4640dd-0eec-4234-8f9a-165e4b4181cc",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [0, 224]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": true,
+        "filters": {}
+      },
+      "id": "5150f3ac-a5fa-4ae6-8915-50b3ccfe4267",
+      "name": "Get many messages",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [288, 224],
+      "webhookId": "d0c57570-71cb-46f6-8c87-bbedd132b304",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "grfbw4gcUsEpyq2K",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "returnAll": true
+      },
+      "id": "582cad72-416e-4246-9d7a-1c69c2175a6d",
+      "name": "Get existing labels",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [512, 224],
+      "executeOnce": true,
+      "webhookId": "8c331cad-9c74-40ee-a6e5-4136b8337832",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "grfbw4gcUsEpyq2K",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst FREEMAIL = ['gmail','googlemail','yahoo','outlook','hotmail','live','msn','icloud','me','aol','proton','protonmail'];\nconst SPECIAL = { github: 'GitHub', n8n: 'n8n', linkedin: 'LinkedIn', youtube: 'YouTube', paypal: 'PayPal', openai: 'OpenAI' };\nfunction labelFor(from) {\n  const m = String(from || '').match(/@([A-Za-z0-9.-]+)/);\n  if (!m) return null;\n  const parts = m[1].toLowerCase().split('.').filter(Boolean);\n  if (parts.length < 2) return null;\n  const second = parts[parts.length - 2];\n  const tld = parts[parts.length - 1];\n  const compound = tld.length === 2 && ['co','com','org','net','gov','ac','edu'].includes(second) && parts.length >= 3;\n  const name = compound ? parts[parts.length - 3] : second;\n  if (FREEMAIL.includes(name)) return null;\n  return SPECIAL[name] || name.charAt(0).toUpperCase() + name.slice(1);\n}\n\nconst existing = new Set($('Get existing labels').all().map(i => String(i.json.name || '').toLowerCase()));\nconst wanted = new Map();\nfor (const m of $('Get many messages').all()) {\n  const label = labelFor(m.json.From);\n  if (label && !existing.has(label.toLowerCase())) wanted.set(label.toLowerCase(), label);\n}\nconst names = [...wanted.values()];\nif (names.length === 0) return [{ json: { needsCreate: false } }];\nreturn names.map(labelName => ({ json: { needsCreate: true, labelName } }));"
+      },
+      "id": "f756b326-d4b9-48b3-8446-202ce08cc736",
+      "name": "Find missing labels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [784, 224],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "needs",
+              "leftValue": "={{ $json.needsCreate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ed1219de-de7d-4107-8e27-b519bfa9cb4d",
+      "name": "Any labels to create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1008, 224]
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "operation": "create",
+        "name": "={{ $json.labelName }}",
+        "options": {}
+      },
+      "id": "0b0813aa-3961-4cbf-805e-03280631fd40",
+      "name": "Create label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1232, 160],
+      "webhookId": "62a11421-a3aa-42fd-9030-5962bebebfc6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "grfbw4gcUsEpyq2K",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "returnAll": true
+      },
+      "id": "e97f63e9-765c-4834-b4df-6bfcc104b256",
+      "name": "Get labels with new ones",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1456, 224],
+      "executeOnce": true,
+      "webhookId": "3fcde217-aae0-4fd7-b8f0-3863d321b7ca",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "grfbw4gcUsEpyq2K",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst FREEMAIL = ['gmail','googlemail','yahoo','outlook','hotmail','live','msn','icloud','me','aol','proton','protonmail'];\nconst SPECIAL = { github: 'GitHub', n8n: 'n8n', linkedin: 'LinkedIn', youtube: 'YouTube', paypal: 'PayPal', openai: 'OpenAI' };\nfunction labelFor(from) {\n  const m = String(from || '').match(/@([A-Za-z0-9.-]+)/);\n  if (!m) return null;\n  const parts = m[1].toLowerCase().split('.').filter(Boolean);\n  if (parts.length < 2) return null;\n  const second = parts[parts.length - 2];\n  const tld = parts[parts.length - 1];\n  const compound = tld.length === 2 && ['co','com','org','net','gov','ac','edu'].includes(second) && parts.length >= 3;\n  const name = compound ? parts[parts.length - 3] : second;\n  if (FREEMAIL.includes(name)) return null;\n  return SPECIAL[name] || name.charAt(0).toUpperCase() + name.slice(1);\n}\n\nconst ids = new Map($input.all().map(i => [String(i.json.name || '').toLowerCase(), i.json.id]));\nconst out = [];\nfor (const m of $('Get many messages').all()) {\n  const label = labelFor(m.json.From);\n  if (!label) continue;\n  const labelId = ids.get(label.toLowerCase());\n  if (!labelId) continue;\n  const already = (m.json.labels || []).some(l => l.id === labelId);\n  if (already) continue;\n  out.push({ json: { messageId: m.json.id, labelId, label } });\n}\nreturn out;"
+      },
+      "id": "54767f03-ce3a-4ea7-a6fe-84756f6ef0c9",
+      "name": "Match messages to labels",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1744, 224]
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": ["={{ $json.labelId }}"]
+      },
+      "id": "4558d758-0132-4829-aeeb-20c286917751",
+      "name": "Apply label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1968, 224],
+      "webhookId": "d8db6ee1-8bb8-495d-b7c5-48cbfb421491",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "grfbw4gcUsEpyq2K",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many messages": {
+      "main": [
+        [
+          {
+            "node": "Get existing labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get existing labels": {
+      "main": [
+        [
+          {
+            "node": "Find missing labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find missing labels": {
+      "main": [
+        [
+          {
+            "node": "Any labels to create?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any labels to create?": {
+      "main": [
+        [
+          {
+            "node": "Create label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get labels with new ones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create label": {
+      "main": [
+        [
+          {
+            "node": "Get labels with new ones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get labels with new ones": {
+      "main": [
+        [
+          {
+            "node": "Match messages to labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match messages to labels": {
+      "main": [
+        [
+          {
+            "node": "Apply label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "7adb0322-2325-4684-8b96-f4691dad451d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "195e408886397f59a378878fe84ef0cfd49da1d67f499edd850bc9e1202d44f9"
+  },
+  "nodeGroups": [
+    {
+      "id": "4cafab1b-6c38-4818-b27d-b4cc967c20b9",
+      "name": "Collect mail and labels",
+      "nodeIds": [
+        "5150f3ac-a5fa-4ae6-8915-50b3ccfe4267",
+        "582cad72-416e-4246-9d7a-1c69c2175a6d"
+      ],
+      "description": "Weekly: pulls every Gmail message and the labels that already exist"
+    },
+    {
+      "id": "cda24c78-ab6c-4dc9-9f5a-132930086fb8",
+      "name": "Label messages",
+      "nodeIds": [
+        "54767f03-ce3a-4ea7-a6fe-84756f6ef0c9",
+        "4558d758-0132-4829-aeeb-20c286917751"
+      ],
+      "description": "Applies the matching domain label to each message"
+    }
+  ],
+  "id": "dcwjqqfhnC3pg6qh",
+  "tags": []
+}
